@@ -3,35 +3,46 @@ version = "2.0" #parallel features
 description = \
 """
     PhyPipe2: Automated pipeline for phylogenetic reconstruction. \n
-    version {}
-    by Nicolás D. Franco-Sierra
+    Version {}
+    coded by Nicolás D. Franco-Sierra
 
     Expected inputs:
-    (1) Nucleotide sequences of a desired marker from several taxa in FASTA format (more than one file is supported).
-    (2) Configuration file listing all options for all software in the routine.
+    (1) Nucleotide sequences of a desired marker from several taxa in
+     FASTA format (more than one file is supported) (-i/--input_file).
+    (2) Configuration file listing all options for all software in the
+     routine (-c/--config_file).
 
     Output: final phylogenetic reconstructed by the desired method.
 
-    What it does? it runs a typical phylogenetic reconstruction routine combining all the required software for all the involved steps (i.e. alignment, model selection, phylogenetic reconstruction, topological tests)
+    What it does? it runs a typical phylogenetic reconstruction routine
+    combining all the required software for all the involved steps (i.e.
+    alignment, model selection, phylogenetic reconstruction, topological
+    tests)
 
 """.format(version)
 
+epilog = \
+"""
+    If only one FASTA file is specified as input, "single-locus routine" will
+    be executed. If multiple FASTA files are given PhyPipe will be executed
+    in its traditional multi-locus mode.
+"""
+
 import sys, os
-from argparse import ArgumentParser
+from argparse import ArgumentParser, RawDescriptionHelpFormatter
 
 exe_path = os.path.split(os.path.abspath(sys.argv[0]))[0]
 sys.path.insert(0,os.path.abspath(os.path.join(exe_path,"..", "..")))
 
-
-
-
-parser = ArgumentParser(prog="PhyPipe", description=description)
-parser.add_argument("-i", "--input_file", dest="input_file",
+parser = ArgumentParser(prog="PhyPipe",
+                        formatter_class=RawDescriptionHelpFormatter,
+                        description=description, epilog=epilog)
+parser.add_argument("-i", "--input_file", dest="input_file", required=True,
                   metavar="FASTA_FILE",
                   nargs='+',
                   type=str,
                   help="Name and path of input file(s) in FASTA format. ")
-parser.add_argument("-c", "--config_file", dest="config_file",
+parser.add_argument("-c", "--config_file", dest="config_file", required=True,
                   metavar="CONFIG_FILE",
                   type=str,
                   help="Name and path of config file to excecute. ")
@@ -160,7 +171,7 @@ phypipe_single_locus.transform(task_func = align,
 
 
 
-# infer phypipe mode to be excecuted
+# infer phypipe mode to be executed
 
 if len(input_file) == 1:
     phypipe = phypipe_single_locus
