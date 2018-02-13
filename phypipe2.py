@@ -1,4 +1,4 @@
-#/usr/bin/env python3
+#!/usr/bin/env python3
 version = "2.0" #parallel features
 description = \
 """
@@ -33,6 +33,8 @@ from argparse import ArgumentParser, RawDescriptionHelpFormatter
 
 exe_path = os.path.split(os.path.abspath(sys.argv[0]))[0]
 sys.path.insert(0,os.path.abspath(os.path.join(exe_path,"..", "..")))
+
+dirpath = os.getcwd()
 
 parser = ArgumentParser(prog="PhyPipe",
                         formatter_class=RawDescriptionHelpFormatter,
@@ -135,10 +137,13 @@ config_file = options.config_file
 working_dir = options.output_directory
 result_file = options.result_file
 
+num_files = len(input_file)
 # Functions
-
-print(input_file)
-print(type(input_file))
+print("Number of files detected as input: {}".format(num_files))
+for filename in input_file :
+    print(filename)
+#print(input_file)
+#print(type(input_file))
 
 
 phypipe_single_locus = Pipeline(name = "Single-locus analysis")
@@ -151,35 +156,33 @@ phypipe_multi_locus = Pipeline(name = "Multi-locus analysis")
 
 def align(input_seq, out_files):
     #out_alignment, flag_file = out_files
+    print("\n [Step: Alignment] \n MAFFT is going to be used as selected aligner.\n")
     run_cmd("mafft --auto {} > {}".format(input_seq, out_files))
+    print("Alignment completed!")
+    print("File written in: {}".format(out_files))
 
     #open(flag_file, "w")
 
 
 #88888888888888888888888888888888888888888888888888888888888888888888888888888888888888888
-# Single-locus phypipe
 
+if len(input_file) == 1:
+    phypipe = phypipe_single_locus
+    print("\nPhyPipe is going to be executed in single-locus mode.\n")
+else:
+    phypipe = phypipe_multi_locus
+    print("\nPhyPipe is going to be executed in multi-locus mode.\n")
+    print("Not yet fully implemented :/")
+
+print("Results are going to be written in:\n {}".format(dirpath + "/" + working_dir))
+
+# Single-locus phypipe
 phypipe_single_locus.mkdir(working_dir)
 phypipe_single_locus.transform(task_func = align,
                                 input    = input_file,
                                 filter   = suffix('.fasta'),
                                 output   = r'\1_aligned.fasta',
                                 output_dir = working_dir)
-
-# Multi-locus phypipe
-
-
-
-
-# infer phypipe mode to be executed
-
-if len(input_file) == 1:
-    phypipe = phypipe_single_locus
-else:
-    phypipe = phypipe_multi_locus
-
-
-
 
 if options.just_print:
     pipeline_printout(sys.stdout, verbose=options.verbose)
