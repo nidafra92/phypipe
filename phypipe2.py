@@ -1,88 +1,78 @@
 #/usr/bin/env python3
-
+version = "2.0" #parallel features
+description = \
 """
-PhyPipe2: Automated pipeline for phylogenetic reconstruction.
+    PhyPipe2: Automated pipeline for phylogenetic reconstruction. \n
+    version {}
+    by Nicolás D. Franco-Sierra
 
-Advantages over PhyPipe ver. 1.
---------------------------------
+    Expected inputs:
+    (1) Nucleotide sequences of a desired marker from several taxa in FASTA format (more than one file is supported).
+    (2) Configuration file listing all options for all software in the routine.
 
- * Many...
- * ...
+    Output: final phylogenetic reconstructed by the desired method.
 
-Install
----------
+    What it does? it runs a typical phylogenetic reconstruction routine combining all the required software for all the involved steps (i.e. alignment, model selection, phylogenetic reconstruction, topological tests)
 
-  $ pip install ruffus --upgrade
-
-copy this script to somewhere in your PATH
-
-Usage
---------
-
-  $ phypipe2 [options] <file/folder>
-
-use option '- '
-
-"""
+""".format(version)
 
 import sys, os
-from optparse import OptionParser
+from argparse import ArgumentParser
 
 exe_path = os.path.split(os.path.abspath(sys.argv[0]))[0]
 sys.path.insert(0,os.path.abspath(os.path.join(exe_path,"..", "..")))
 
 
-exe_path = os.path.split(os.path.abspath(sys.argv[0]))[0]
 
-parser = OptionParser(version="%prog 1.0", usage = "\n\n  %prog --input_file \
-                    QUERY_FASTA --config_file FASTA_DATABASE [more_options]")
-parser.add_option("-i", "--input_file", dest="input_file",
-                  metavar="FILE",
-                  type="string",
+
+parser = ArgumentParser(prog="PhyPipe", description=description)
+parser.add_argument("-i", "--input_file", dest="input_file",
+                  metavar="FASTA_FILE",
+                  nargs='+',
+                  type=str,
                   help="Name and path of input file(s) in FASTA format. ")
-parser.add_option("-c", "--config_file", dest="config_file",
-                  metavar="FILE",
-                  type="string",
+parser.add_argument("-c", "--config_file", dest="config_file",
+                  metavar="CONFIG_FILE",
+                  type=str,
                   help="Name and path of config file to excecute. ")
-parser.add_option("--result_file", dest="result_file",
-                  metavar="FILE",
-                  type="string",
+parser.add_argument("--result_file", dest="result_file",
+                  metavar="RESULT_FILE",
+                  type=str,
                   default="final.phylo_results",
                   help="Name and path of where the files should end up. ")
-parser.add_option("-t", "--temp_directory", dest="temp_directory",
-                  metavar="PATH",
-                  type="string",
-                  default="tmp",
-                  help="Name and path of temporary directory where calculations"
+parser.add_argument("-d", "--output_directory", dest="output_directory",
+                  metavar="OUTPUT_PATH",
+                  type=str,
+                  default="phypipe_results",
+                  help="Name and path of output directory where calculations"
                             "should take place. ")
-
-
-parser.add_option("-v", "--verbose", dest = "verbose",
+# verbosity
+parser.add_argument("-v", "--verbose", dest = "verbose",
                   action="count", default=0,
                   help="Print more detailed messages for each additional verbose level."
                        " E.g. run_parallel_blast --verbose --verbose --verbose ... (or -vvv)")
 #   pipeline
 #
-parser.add_option("-j", "--jobs", dest="jobs",
+parser.add_argument("-j", "--jobs", dest="jobs",
                   default=1,
-                  metavar="jobs",
-                  type="int",
+                  metavar="THREADS",
+                  type=int,
                   help="Specifies the number of jobs (operations) to run \
                   in parallel.")
-parser.add_option("--flowchart", dest="flowchart",
+parser.add_argument("--flowchart", dest="flowchart",
                   metavar="FILE",
-                  type="string",
+                  type=str,
                   help="Print flowchart of the pipeline to FILE. Flowchart "
                        "format depends on extension. Alternatives include "
                        "('.dot', '.jpg', '*.svg', '*.png' etc). Formats "
                        "other than '.dot' require "
                        "the dot program to be installed (http://www.graphviz.org/).")
-parser.add_option("-n", "--just_print", dest="just_print",
+parser.add_argument("-n", "--just_print", dest="just_print",
                     action="store_true", default=False,
                     help="Only print a trace (description) of the pipeline. "
                          " The level of detail is set by --verbose.")
 
-(options, remaining_args) = parser.parse_args()
+options = parser.parse_args()
 
 
 if not options.flowchart:
@@ -114,7 +104,7 @@ def run_cmd(cmd_str):
 #88888888888888888888888888888888888888888888888888888888888888888888888888888888888888888
 
 import logging
-logger = logging.getLogger("run_parallel_blast")
+logger = logging.getLogger("run_phypipe")
 #
 # We are interesting in all messages
 #
@@ -130,63 +120,58 @@ if options.verbose:
 #88888888888888888888888888888888888888888888888888888888888888888888888888888888888888888
 
 input_file = options.input_file
-temp_directory = options.temp_directory
-result_file    = options.result_file
+config_file = options.config_file
+working_dir = options.output_directory
+result_file = options.result_file
 
-@follows(mkdir(temp_directory))
+# Functions
 
-@mkdir(input_file, suffix(".fasta"),  r"my_path/\1.workdir")
-def splitFasta (infile, outfile):
-    """Split sequence file into
-       as many fragments as appropriate
-       depending on the size of input_file"""
-    #
-    #   Clean up any segment files from previous runs before creating new one
-    #
-    # for i in segments:
-        # os.unlink(i)
-    #
-    current_file_index = 0
-    for line in open(input_file):
-        #
-        # start a new file for each accession line
-        #
-        if line[0] == '>':
-            current_file_index += 1
-            file_name = "%d.segment" % current_file_index
-            file_path = os.path.join(temp_directory, file_name)
-            current_file = open(file_path, "w")
-        current_file.write(line)
+print(input_file)
+print(type(input_file))
 
 
-@transform(splitFasta, suffix(".segment"), [".blastResult", ".blastSuccess"])
-def runBlast(seqFile,  output_files):
-    #
-    blastResultFile, flag_file = output_files
-    #
-    run_cmd("blastall -p blastp -d human.protein.faa -i %s > %s" % (seqFile, blastResultFile))
-    #
-    #   "touch" flag file to indicate success
-    #
-    open(flag_file, "w")
+phypipe_single_locus = Pipeline(name = "Single-locus analysis")
 
-
-@merge(runBlast, result_file)
-def combineBlastResults (blastResult_and_flag_Files, combinedBlastResultFile):
-    """Combine blast results"""
-    #
-    output_file = open(combinedBlastResultFile,  "w")
-    for blastResult_file, flag_file in blastResult_and_flag_Files:
-        output_file.write(open(blastResult_file).read())
-
+phypipe_multi_locus = Pipeline(name = "Multi-locus analysis")
 
 #88888888888888888888888888888888888888888888888888888888888888888888888888888888888888888
 
 #   Print list of tasks
 
+def align(input_seq, out_files):
+    #out_alignment, flag_file = out_files
+    run_cmd("mafft --auto {} > {}".format(input_seq, out_files))
+
+    #open(flag_file, "w")
+
+
 #88888888888888888888888888888888888888888888888888888888888888888888888888888888888888888
+# Single-locus phypipe
+
+phypipe_single_locus.mkdir(working_dir)
+phypipe_single_locus.transform(task_func = align,
+                                input    = input_file,
+                                filter   = suffix('.fasta'),
+                                output   = r'\1_aligned.fasta',
+                                output_dir = working_dir)
+
+# Multi-locus phypipe
+
+
+
+
+# infer phypipe mode to be excecuted
+
+if len(input_file) == 1:
+    phypipe = phypipe_single_locus
+else:
+    phypipe = phypipe_multi_locus
+
+
+
+
 if options.just_print:
-    pipeline_printout(sys.stdout, [combineBlastResults], verbose=options.verbose)
+    pipeline_printout(sys.stdout, verbose=options.verbose)
 
 #88888888888888888888888888888888888888888888888888888888888888888888888888888888888888888
 #   Print flowchart
@@ -196,7 +181,6 @@ elif options.flowchart:
     output_format = os.path.splitext(options.flowchart)[1][1:]
     pipeline_printout_graph (open(options.flowchart, "w"),
                              output_format,
-                             [combineBlastResults],
                              no_key_legend = True)
 #88888888888888888888888888888888888888888888888888888888888888888888888888888888888888888
 
@@ -204,5 +188,5 @@ elif options.flowchart:
 
 #88888888888888888888888888888888888888888888888888888888888888888888888888888888888888888
 else:
-    pipeline_run([combineBlastResults],  multiprocess = options.jobs,
+    phypipe.run(multiprocess = options.jobs,
                         logger = logger, verbose=options.verbose)
