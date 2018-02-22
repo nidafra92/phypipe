@@ -39,12 +39,12 @@ dirpath = os.getcwd()
 parser = ArgumentParser(prog="PhyPipe",
                         formatter_class=RawDescriptionHelpFormatter,
                         description=description, epilog=epilog)
-parser.add_argument("-i", "--input_file", dest="input_file", required=True,
+parser.add_argument("-i", "--input_file", dest="input_file",
                   metavar="FASTA_FILE",
                   nargs='+',
                   type=str,
                   help="Name and path of input file(s) in FASTA format. ")
-parser.add_argument("-c", "--config_file", dest="config_file", required=True,
+parser.add_argument("-c", "--config_file", dest="config_file",
                   metavar="CONFIG_FILE",
                   type=str,
                   help="Name and path of config file to excecute. ")
@@ -59,6 +59,8 @@ parser.add_argument("-d", "--output_directory", dest="output_directory",
                   default="phypipe_results",
                   help="Name and path of output directory where calculations"
                             "should take place. ")
+
+parser.add_argument('--version', action='version', version='%(prog)s {}'.format(version))
 # verbosity
 parser.add_argument("-v", "--verbose", dest = "verbose",
                   action="count", default=0,
@@ -137,36 +139,53 @@ config_file = options.config_file
 working_dir = options.output_directory
 result_file = options.result_file
 
-num_files = len(input_file)
-# Functions
-print("Number of files detected as input: {}".format(num_files))
-for filename in input_file :
-    print(filename)
+if input_file:
+    num_files = len(input_file)
+    print("Number of files detected as input: {}".format(num_files))
+    for filename in input_file :
+        print(filename)
+else:
+    num_files = 0
+
 #print(input_file)
 #print(type(input_file))
 
-
 phypipe_single_locus = Pipeline(name = "Single-locus analysis")
-
 phypipe_multi_locus = Pipeline(name = "Multi-locus analysis")
 
 #88888888888888888888888888888888888888888888888888888888888888888888888888888888888888888
 
 #   Print list of tasks
 
+def task_finished():
+    print("Task finished")
+
 def align(input_seq, out_files):
     #out_alignment, flag_file = out_files
     print("\n [Step: Alignment] \n MAFFT is going to be used as selected aligner.\n")
     run_cmd("mafft --auto {} > {}".format(input_seq, out_files))
-    print("Alignment completed!")
     print("File written in: {}".format(out_files))
 
     #open(flag_file, "w")
 
 
+
+###################################
+
+# Single-locus phypipe
+#phypipe_single_locus.mkdir(working_dir)
+phypipe_single_locus.transform(task_func = align,
+                                input    = input_file,
+                                filter   = suffix('.fasta'),
+                                output   = r'\1_aligned.fasta',
+                                output_dir = working_dir)\
+                    .posttask(task_finished)\
+                    .mkdir(working_dir)
+
+
 #88888888888888888888888888888888888888888888888888888888888888888888888888888888888888888
 
-if len(input_file) == 1:
+if num_files == 1:
     phypipe = phypipe_single_locus
     print("\nPhyPipe is going to be executed in single-locus mode.\n")
 else:
@@ -175,14 +194,6 @@ else:
     print("Not yet fully implemented :/")
 
 print("Results are going to be written in:\n {}".format(dirpath + "/" + working_dir))
-
-# Single-locus phypipe
-phypipe_single_locus.mkdir(working_dir)
-phypipe_single_locus.transform(task_func = align,
-                                input    = input_file,
-                                filter   = suffix('.fasta'),
-                                output   = r'\1_aligned.fasta',
-                                output_dir = working_dir)
 
 if options.just_print:
     phypipe.printout(sys.stdout, verbose=options.verbose)
@@ -197,9 +208,7 @@ elif options.flowchart:
                              output_format,
                              no_key_legend = True)
 #88888888888888888888888888888888888888888888888888888888888888888888888888888888888888888
-
 #   Run Pipeline
-
 #88888888888888888888888888888888888888888888888888888888888888888888888888888888888888888
 else:
     phypipe.run(multiprocess = options.jobs,
