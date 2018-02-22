@@ -185,7 +185,7 @@ phypipe_single_locus.transform(task_func = align,
                                 output_dir = working_dir)
 
 if options.just_print:
-    pipeline_printout(sys.stdout, verbose=options.verbose)
+    phypipe.printout(sys.stdout, verbose=options.verbose)
 
 #88888888888888888888888888888888888888888888888888888888888888888888888888888888888888888
 #   Print flowchart
@@ -193,7 +193,7 @@ if options.just_print:
 elif options.flowchart:
     # use file extension for output format
     output_format = os.path.splitext(options.flowchart)[1][1:]
-    pipeline_printout_graph (open(options.flowchart, "w"),
+    phypipe.printout_graph (open(options.flowchart, "w"),
                              output_format,
                              no_key_legend = True)
 #88888888888888888888888888888888888888888888888888888888888888888888888888888888888888888
