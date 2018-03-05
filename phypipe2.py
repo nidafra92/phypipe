@@ -30,6 +30,8 @@ epilog = \
 
 import sys, os
 from argparse import ArgumentParser, RawDescriptionHelpFormatter
+from Bio import SeqIO
+from Bio.Alphabet import IUPAC
 
 exe_path = os.path.split(os.path.abspath(sys.argv[0]))[0]
 sys.path.insert(0,os.path.abspath(os.path.join(exe_path,"..", "..")))
@@ -113,6 +115,7 @@ def run_cmd(cmd_str):
     if process.returncode != 0:
         raise Exception("Failed to run '%s'\n%s%sNon-zero exit status %s" %
                             (cmd_str, stdout_str, stderr_str, process.returncode))
+    return stdout_str.decode(), stderr_str.decode()
 
 #88888888888888888888888888888888888888888888888888888888888888888888888888888888888888888
 #   Logger
@@ -161,14 +164,28 @@ def task_finished():
     print("Task finished")
 
 def align(input_seq, out_files):
-    #out_alignment, flag_file = out_files
+    """
+    """
     print("\n [Step: Alignment] \n MAFFT is going to be used as selected aligner.\n")
     run_cmd("mafft --auto {} > {}".format(input_seq, out_files))
     print("File written in: {}".format(out_files))
 
-    #open(flag_file, "w")
+def modeltest(input_seq, outreports):
+    """
+    """
+    output, error = run_cmd("jModelTest.jar -d {} -s 5 -f -i -g 4 -BIC -p -tr 4".format(input_seq))
+    best_model_stats = output.partition("::Best Models::")[2].partition("---\n")[2].split("\t")
+    criterion, best_model = best_model_stats[0:2]
+    with open(outreports,"a") as model_file:
+        model_file.write("{}\t{}".format(criterion, best_model))
+    print(criterion, best_model)
 
-
+def fasta2nexus(input_fasta, output_nexus):
+    """
+    """
+    with open(input_fasta) as fasta, open(output_nexus,"a") as nexus:
+        sequences = SeqIO.parse(fasta, "fasta", alphabet=IUPAC.ambiguous_dna)
+        SeqIO.write(sequences, nexus, "nexus")
 
 ###################################
 
@@ -181,7 +198,18 @@ phypipe_single_locus.transform(task_func = align,
                                 output_dir = working_dir)\
                     .posttask(task_finished)\
                     .mkdir(working_dir)
-
+phypipe_single_locus.transform(task_func = modeltest,
+                                input = output_from("align"),
+                                filter = suffix("_aligned.fasta"),
+                                output = r'\1_best_model.txt',
+                                output_dir = working_dir)\
+                    .posttask(task_finished)
+phypipe_single_locus.transform(task_func = fasta2nexus,
+                                input = output_from("align"),
+                                filter = suffix('.fasta'),
+                                output =  r'\1.nexus',
+                                output_dir = working_dir)\
+                    .posttask(task_finished)
 
 #88888888888888888888888888888888888888888888888888888888888888888888888888888888888888888
 
