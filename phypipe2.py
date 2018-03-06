@@ -42,11 +42,11 @@ parser = ArgumentParser(prog="PhyPipe",
                         formatter_class=RawDescriptionHelpFormatter,
                         description=description, epilog=epilog)
 parser.add_argument("-i", "--input_file", dest="input_file",
-                  metavar="FASTA_FILE",
+                  metavar="FASTA_FILE", required = True,
                   nargs='+',
                   type=str,
                   help="Name and path of input file(s) in FASTA format. ")
-parser.add_argument("-c", "--config_file", dest="config_file",
+parser.add_argument("-c", "--config_file", dest="config_file", required = True,
                   metavar="CONFIG_FILE",
                   type=str,
                   help="Name and path of config file to excecute. ")
@@ -104,9 +104,7 @@ import subprocess
 ####### privisional parameters
 
 searchreps = 2
-bootstrapreps = 100
-
-
+bootstrapreps = 3
 
 #88888888888888888888888888888888888888888888888888888888888888888888888888888888888888888
 #   Helper functions
@@ -241,7 +239,7 @@ def garliconf_gen(inputs, output, searchreps, bootstrapreps):
     #nexus_name = nexus_name.split("/")[1]
     with open(output, "a") as conf_file, open(input_model) as model_file:
         model_block = model_parser2garli(model_file.read().split("\t")[1])
-        prefix = output.split("/")[1].split("_")[0]
+        prefix = output.partition("_garli.conf")[0]
         conf_string = base_conf.format(nexus_name, prefix, searchreps, bootstrapreps, model_block) + \
                 master
         conf_file.write(conf_string)
@@ -250,10 +248,14 @@ def run_garli(conf_file, outfile):
     run_cmd("Garli {}".format(conf_file))
     open(outfile)
 
+def sumtrees(input_trees, sum_tree):
+    best_tree, boot_trees = input_trees
+    run_cmd("sumtrees.py -p -d0 -o {} -t {} {}".format(sum_tree, best_tree, boot_trees))
+    open(sum_tree)
+
 ###################################
 
 # Single-locus phypipe
-#phypipe_single_locus.mkdir(working_dir)
 phypipe_single_locus.transform(task_func = align,
                                 input    = input_file,
                                 filter   = suffix('.fasta'),
@@ -295,6 +297,9 @@ phypipe_single_locus.transform(task_func = run_garli,
                                 filter = suffix("_garli.conf"),
                                 output = ".boot.tre",
                                 output_dir = working_dir)
+phypipe_single_locus.merge(task_func=sumtrees,
+                            input = [output_from("garli_ML"), output_from("garli_BS")],
+                            output = "ML_w_bootstrap.tre")
 
 #88888888888888888888888888888888888888888888888888888888888888888888888888888888888888888
 
