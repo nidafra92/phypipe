@@ -29,6 +29,7 @@ epilog = \
 """
 
 import sys, os
+import configparser
 from argparse import ArgumentParser, RawDescriptionHelpFormatter
 from Bio import SeqIO
 from Bio.Alphabet import IUPAC
@@ -102,6 +103,9 @@ from ruffus import *
 import subprocess
 
 ####### privisional parameters
+config_file = options.config_file
+config_handle = configparser.ConfigParser()
+config_handle.read(config_file)
 
 searchreps = 2
 bootstrapreps = 3
@@ -180,7 +184,6 @@ if options.verbose:
 #88888888888888888888888888888888888888888888888888888888888888888888888888888888888888888
 
 input_file = options.input_file
-config_file = options.config_file
 working_dir = options.output_directory
 result_file = options.result_file
 
