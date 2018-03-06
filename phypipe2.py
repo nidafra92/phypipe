@@ -28,17 +28,25 @@ epilog = \
     in its traditional multi-locus mode.
 """
 
+################################################################################
+#   Imports
+################################################################################
 import sys, os
 import configparser
 from argparse import ArgumentParser, RawDescriptionHelpFormatter
 from Bio import SeqIO
 from Bio.Alphabet import IUPAC
+from ruffus import *
+import subprocess
+import logging
 
 exe_path = os.path.split(os.path.abspath(sys.argv[0]))[0]
 sys.path.insert(0,os.path.abspath(os.path.join(exe_path,"..", "..")))
 
 dirpath = os.getcwd()
-
+################################################################################
+#   Argument parser definitions
+################################################################################
 parser = ArgumentParser(prog="PhyPipe",
                         formatter_class=RawDescriptionHelpFormatter,
                         description=description, epilog=epilog)
@@ -62,16 +70,12 @@ parser.add_argument("-d", "--output_directory", dest="output_directory",
                   default="phypipe_results",
                   help="Name and path of output directory where calculations"
                             "should take place. ")
-
 parser.add_argument('--version', action='version', version='%(prog)s {}'.format(version))
-# verbosity
 parser.add_argument("-v", "--verbose", dest = "verbose",
-                  action="count", default=0,
+                  action="count", default=1,
                   help="Print more detailed messages for each additional verbose level."
                        " E.g. run_parallel_blast --verbose --verbose --verbose ... (or -vvv)")
-#   pipeline
-#
-parser.add_argument("-j", "--jobs", dest="jobs",
+parser.add_argument("-t", "--threads", dest="jobs",
                   default=1,
                   metavar="THREADS",
                   type=int,
@@ -91,29 +95,14 @@ parser.add_argument("-n", "--just_print", dest="just_print",
                          " The level of detail is set by --verbose.")
 
 options = parser.parse_args()
-
-
-if not options.flowchart:
-    if not options.config_file:
-        parser.error("\n\n\tMissing parameter --config_file FILE\n\n")
-    if not options.input_file:
-        parser.error("\n\n\tMissing parameter --input_file FILE(s)\n\n")
-
-from ruffus import *
-import subprocess
-
-####### privisional parameters
+# get basic parameters from command line
 config_file = options.config_file
-config_handle = configparser.ConfigParser()
-config_handle.read(config_file)
-
-searchreps = 2
-bootstrapreps = 3
-
-#88888888888888888888888888888888888888888888888888888888888888888888888888888888888888888
+input_file = options.input_file
+working_dir = options.output_directory
+result_file = options.result_file
+################################################################################
 #   Helper functions
-#88888888888888888888888888888888888888888888888888888888888888888888888888888888888888888
-
+################################################################################
 def run_cmd(cmd_str):
     """
     This helper function excecute a bash command as a separate process
@@ -163,15 +152,11 @@ def model_parser2garli(model_string):
                       inv_dict[inv_status]
     return composed_string
 
-#88888888888888888888888888888888888888888888888888888888888888888888888888888888888888888
-#   Logger
-#88888888888888888888888888888888888888888888888888888888888888888888888888888888888888888
-
-import logging
+################################################################################
+#   logging
+################################################################################
 logger = logging.getLogger("run_phypipe")
-#
-# We are interesting in all messages
-#
+
 if options.verbose:
     logger.setLevel(logging.DEBUG)
     stderrhandler = logging.StreamHandler(sys.stderr)
@@ -179,32 +164,24 @@ if options.verbose:
     stderrhandler.setLevel(logging.DEBUG)
     logger.addHandler(stderrhandler)
 
-#88888888888888888888888888888888888888888888888888888888888888888888888888888888888888888
-#   Pipeline tasks
-#88888888888888888888888888888888888888888888888888888888888888888888888888888888888888888
+################################################################################
+#   Get run parameters from config file
+################################################################################
+config_handle = configparser.ConfigParser()
+config_handle.read(config_file)
 
-input_file = options.input_file
-working_dir = options.output_directory
-result_file = options.result_file
+# provisional parameters
+searchreps = 2
+bootstrapreps = 3
 
-if input_file:
-    num_files = len(input_file)
-    print("Number of files detected as input: {}".format(num_files))
-    for filename in input_file :
-        print(filename)
-else:
-    num_files = 0
-
-#print(input_file)
-#print(type(input_file))
-
+################################################################################
+#   General pipelines definitions
+################################################################################
 phypipe_single_locus = Pipeline(name = "Single-locus analysis")
 phypipe_multi_locus = Pipeline(name = "Multi-locus analysis")
-
-#88888888888888888888888888888888888888888888888888888888888888888888888888888888888888888
-
-#   Print list of tasks
-
+################################################################################
+#   Tasks definitions
+################################################################################
 def task_finished():
     print("Task finished")
 
@@ -239,7 +216,6 @@ def garliconf_gen(inputs, output, searchreps, bootstrapreps):
     master = "[master]\nnindivs = 4\nholdover = 1\nselectionintensity = 0.5\nholdoverpenalty = 0\nstopgen = 5000000\nstoptime = 5000000\n\nstartoptprec = 0.5\nminoptprec = 0.01\nnumberofprecreductions = 10\ntreerejectionthreshold = 50.0\ntopoweight = 1.0\nmodweight = 0.05\nbrlenweight = 0.2\nrandnniweight = 0.1\nrandsprweight = 0.3\nlimsprweight =  0.6\nintervallength = 100\nintervalstostore = 5\nlimsprrange = 6\nmeanbrlenmuts = 5\ngammashapebrlen = 1000\ngammashapemodel = 1000\nuniqueswapbias = 0.1\ndistanceswapbias = 1.0"
     print(inputs)
     nexus_name, input_model = inputs
-    #nexus_name = nexus_name.split("/")[1]
     with open(output, "a") as conf_file, open(input_model) as model_file:
         model_block = model_parser2garli(model_file.read().split("\t")[1])
         prefix = output.partition("_garli.conf")[0]
@@ -256,9 +232,9 @@ def sumtrees(input_trees, sum_tree):
     run_cmd("sumtrees.py -p -d0 -o {} -t {} {}".format(sum_tree, best_tree, boot_trees))
     open(sum_tree)
 
-###################################
-
-# Single-locus phypipe
+################################################################################
+# Pipeline definition for single-locus phypipe
+################################################################################
 phypipe_single_locus.transform(task_func = align,
                                 input    = input_file,
                                 filter   = suffix('.fasta'),
@@ -304,7 +280,16 @@ phypipe_single_locus.merge(task_func=sumtrees,
                             input = [output_from("garli_ML"), output_from("garli_BS")],
                             output = "ML_w_bootstrap.tre")
 
-#88888888888888888888888888888888888888888888888888888888888888888888888888888888888888888
+################################################################################
+#   Pipeline selection according number of files found in input (-i FILE(s))
+################################################################################
+if input_file:
+    num_files = len(input_file)
+    print("Number of files detected as input: {}".format(num_files))
+    for filename in input_file :
+        print(filename)
+else:
+    num_files = 0
 
 if num_files == 1:
     phypipe = phypipe_single_locus
@@ -316,21 +301,22 @@ else:
 
 print("Results are going to be written in:\n {}".format(dirpath + "/" + working_dir))
 
+################################################################################
+#   print list of tasks for the selected workflow (only if -n option is given)
+################################################################################
 if options.just_print:
     phypipe.printout(sys.stdout, verbose=options.verbose)
-
-#88888888888888888888888888888888888888888888888888888888888888888888888888888888888888888
-#   Print flowchart
-#88888888888888888888888888888888888888888888888888888888888888888888888888888888888888888
+################################################################################
+#   print flowchart for selected pipeline (if --flowchart FILE is given)
+################################################################################
 elif options.flowchart:
-    # use file extension for output format
     output_format = os.path.splitext(options.flowchart)[1][1:]
-    phypipe.printout_graph (open(options.flowchart, "w"),
-                             output_format,
+    phypipe.printout_graph(stream = options.flowchart,
+                             output_format = output_format,
                              no_key_legend = True)
-#88888888888888888888888888888888888888888888888888888888888888888888888888888888888888888
-#   Run Pipeline
-#88888888888888888888888888888888888888888888888888888888888888888888888888888888888888888
+################################################################################
+#   Run selected pipeline (if -n is not present)
+################################################################################
 else:
     phypipe.run(multiprocess = options.jobs,
                         logger = logger, verbose=options.verbose)
