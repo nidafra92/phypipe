@@ -171,9 +171,11 @@ config_handle = configparser.ConfigParser()
 config_handle.read(config_file)
 
 # provisional parameters
-searchreps = 2
-bootstrapreps = 3
+garli_params = config_handle['Garli run parameters']
+searchreps = garli_params['searchreps']
+bootstrapreps = garli_params['bootstrapreps']
 
+print(searchreps,bootstrapreps)
 ################################################################################
 #   General pipelines definitions
 ################################################################################
