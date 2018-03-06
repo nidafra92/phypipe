@@ -101,13 +101,25 @@ if not options.flowchart:
 from ruffus import *
 import subprocess
 
+####### privisional parameters
+
+searchreps = 2
+bootstrapreps = 100
+
+
+
 #88888888888888888888888888888888888888888888888888888888888888888888888888888888888888888
-#   Functions
+#   Helper functions
 #88888888888888888888888888888888888888888888888888888888888888888888888888888888888888888
 
 def run_cmd(cmd_str):
     """
-    Throw exception if run command fails
+    This helper function excecute a bash command as a separate process
+    and returns an exception if the command fails.
+
+    It also returns the standard output and the standard error of the command as
+    str objects.
+
     """
     process = subprocess.Popen(cmd_str, stdout = subprocess.PIPE,
                                 stderr = subprocess.PIPE, shell = True)
@@ -116,6 +128,38 @@ def run_cmd(cmd_str):
         raise Exception("Failed to run '%s'\n%s%sNon-zero exit status %s" %
                             (cmd_str, stdout_str, stderr_str, process.returncode))
     return stdout_str.decode(), stderr_str.decode()
+
+def model_parser2garli(model_string):
+    """
+    Parses a model string to the equivalent command block for Garli
+    e.g. converts "GTR+I+G" to: "ratematrix = 6rate
+                                 statefrequencies = estimate
+                                 ratehetmodel = gamma
+                                 numratecats = 4
+                                 invariantsites = estimate"
+
+    """
+    #define equivalencies in dictionaries
+    model_dict = {"GTR":"ratematrix = 6rate\nstatefrequencies = estimate\n",
+                  "SYM":"ratematrix = 6rate\nstatefrequencies = equal\n",
+                  "HKY":"ratematrix = 2rate\nstatefrequencies = estimate\n",
+                  "K80":"ratematrix = 2rate\nstatefrequencies = equal\n",
+                  "F81":"ratematrix = 1rate\nstatefrequencies = estimate\n",
+                  "JC":"ratematrix = 1rate\nstatefrequencies = equal\n"}
+    gamma_dict = {True:"ratehetmodel = gamma\nnumratecats = 4\n",
+                    False:"ratehetmodel = none\nnumratecats = 1\n"}
+    inv_dict = {True:"invariantsites = estimate\n",
+                False:"invariantsites = none"}
+    # parse model name
+    model_info = model_string.split("+")
+    model = model_info[0]
+    inv_status = True if "I" in model_info else False
+    gamma_status = True if "G" in model_info else False
+    # compose Garli block
+    model_string = model_dict[model] if model in model_dict else "GTR"
+    composed_string = model_string + gamma_dict[gamma_status] + \
+                      inv_dict[inv_status]
+    return composed_string
 
 #88888888888888888888888888888888888888888888888888888888888888888888888888888888888888888
 #   Logger
@@ -187,6 +231,25 @@ def fasta2nexus(input_fasta, output_nexus):
         sequences = SeqIO.parse(fasta, "fasta", alphabet=IUPAC.ambiguous_dna)
         SeqIO.write(sequences, nexus, "nexus")
 
+def garliconf_gen(inputs, output, searchreps, bootstrapreps):
+    """
+    """
+    base_conf = "[general]\ndatafname = {0}\nconstraintfile = none\nstreefname = stepwise\nattachmentspertaxon = 50\nofprefix = {1}\nrandseed = -1\navailablememory = 512\nlogevery = 10\nsaveevery = 100\nrefinestart = 1\noutputeachbettertopology = 0\noutputcurrentbesttopology = 0\nenforcetermconditions = 1\ngenthreshfortopoterm = 20000\nscorethreshforterm = 0.05\nsignificanttopochange = 0.01\noutputphyliptree = 0\noutputmostlyuselessfiles = 0\nwritecheckpoints = 0\nrestart = 0\noutgroup = 1\nresampleproportion = 1.0\ninferinternalstateprobs = 0\noutputsitelikelihoods = 0\noptimizeinputonly = 0\ncollapsebranches = 1\n\nsearchreps = {2}\nbootstrapreps = {3}\n\n[model1]\n{4}\n\n"
+    master = "[master]\nnindivs = 4\nholdover = 1\nselectionintensity = 0.5\nholdoverpenalty = 0\nstopgen = 5000000\nstoptime = 5000000\n\nstartoptprec = 0.5\nminoptprec = 0.01\nnumberofprecreductions = 10\ntreerejectionthreshold = 50.0\ntopoweight = 1.0\nmodweight = 0.05\nbrlenweight = 0.2\nrandnniweight = 0.1\nrandsprweight = 0.3\nlimsprweight =  0.6\nintervallength = 100\nintervalstostore = 5\nlimsprrange = 6\nmeanbrlenmuts = 5\ngammashapebrlen = 1000\ngammashapemodel = 1000\nuniqueswapbias = 0.1\ndistanceswapbias = 1.0"
+    print(inputs)
+    nexus_name, input_model = inputs
+    #nexus_name = nexus_name.split("/")[1]
+    with open(output, "a") as conf_file, open(input_model) as model_file:
+        model_block = model_parser2garli(model_file.read().split("\t")[1])
+        prefix = output.split("/")[1].split("_")[0]
+        conf_string = base_conf.format(nexus_name, prefix, searchreps, bootstrapreps, model_block) + \
+                master
+        conf_file.write(conf_string)
+
+def run_garli(conf_file, outfile):
+    run_cmd("Garli {}".format(conf_file))
+    open(outfile)
+
 ###################################
 
 # Single-locus phypipe
@@ -210,6 +273,28 @@ phypipe_single_locus.transform(task_func = fasta2nexus,
                                 output =  r'\1.nexus',
                                 output_dir = working_dir)\
                     .posttask(task_finished)
+phypipe_single_locus.merge(task_func = garliconf_gen,
+                            name = "ML_garliconf_gen",
+                            input = [output_from("fasta2nexus"), output_from("modeltest")],
+                            output = working_dir + "/ML_garli.conf",
+                            extras = [searchreps, "0"])
+phypipe_single_locus.merge(task_func = garliconf_gen,
+                            name = "BS_garliconf_gen",
+                            input = [output_from("fasta2nexus"), output_from("modeltest")],
+                            output =  working_dir + "/BS_garli.conf",
+                            extras = ["1", bootstrapreps])
+phypipe_single_locus.transform(task_func = run_garli,
+                                name = "garli_ML",
+                                input = output_from("ML_garliconf_gen"),
+                                filter = suffix("_garli.conf"),
+                                output = ".best.tre",
+                                output_dir = working_dir)
+phypipe_single_locus.transform(task_func = run_garli,
+                                name = "garli_BS",
+                                input = output_from("BS_garliconf_gen"),
+                                filter = suffix("_garli.conf"),
+                                output = ".boot.tre",
+                                output_dir = working_dir)
 
 #88888888888888888888888888888888888888888888888888888888888888888888888888888888888888888
 
