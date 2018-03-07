@@ -190,9 +190,8 @@ def task_finished():
 def align(input_seq, out_files):
     """
     """
-    print("\n [Step: Alignment] \n MAFFT is going to be used as selected aligner.\n")
     run_cmd("mafft --auto {} > {}".format(input_seq, out_files))
-    print("File written in: {}".format(out_files))
+    open(out_files)
 
 def modeltest(input_seq, outreports):
     """
@@ -202,7 +201,6 @@ def modeltest(input_seq, outreports):
     criterion, best_model = best_model_stats[0:2]
     with open(outreports,"a") as model_file:
         model_file.write("{}\t{}".format(criterion, best_model))
-    print(criterion, best_model)
 
 def fasta2nexus(input_fasta, output_nexus):
     """
@@ -234,6 +232,28 @@ def sumtrees(input_trees, sum_tree):
     run_cmd("sumtrees.py -p -d0 -o {} -t {} {}".format(sum_tree, best_tree, boot_trees))
     open(sum_tree)
 
+def virtualribosome(nuc_fasta, aa_fasta, code):
+    run_cmd("dna2pep.py -m {} -O fasta {} > {}".format(code, nuc_fasta, aa_fasta))
+    open(aa_fasta)
+
+def revtrans(nuc_fasta, aa_aligned, nuc_aligned):
+    run_cmd("revtrans.py {} {} -mtx {} -O {} --allinternal".format(nuc_fasta,
+                aa_aligned, nuc_aligned))
+    open(nuc_aligned)
+
+def concat_alignments(inputs, concat_alignment):
+    #
+    open(concat_alignment)
+
+def partitionfinder(arg):
+    pass
+
+def run_mrbayes(nexus_file, out_tree):
+    run_cmd("mb {}".format(nexus_file))
+    open(out_tree)
+
+def run_raxml(arg):
+    pass
 ################################################################################
 # Pipeline definition for single-locus phypipe
 ################################################################################
@@ -281,7 +301,21 @@ phypipe_single_locus.transform(task_func = run_garli,
 phypipe_single_locus.merge(task_func=sumtrees,
                             input = [output_from("garli_ML"), output_from("garli_BS")],
                             output = "ML_w_bootstrap.tre")
-
+#(?P<prefix>.+)
+#{prefix[0]}
+################################################################################
+# Pipeline definition for multi-locus phypipe
+################################################################################
+phypipe_multi_locus.transform(task_func = virtualribosome,
+                                input    = input_file,
+                                filter   = formatter(".+/(?P<prefix>.+)_cds(?P<code>\d+).fasta"),
+                                output   = os.path.join(working_dir, r'{prefix[0]}_aa{code[0]}.fasta'),
+                                #output_dir = working_dir,
+                                extras = [r"{code[0]}"])\
+                    .posttask(task_finished)\
+                    .mkdir(working_dir)
+#phypipe_multi_locus.transform(task_func = align,
+#                                input = "*aligned.")
 ################################################################################
 #   Pipeline selection according number of files found in input (-i FILE(s))
 ################################################################################
