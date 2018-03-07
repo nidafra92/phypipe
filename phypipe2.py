@@ -301,8 +301,7 @@ phypipe_single_locus.transform(task_func = run_garli,
 phypipe_single_locus.merge(task_func=sumtrees,
                             input = [output_from("garli_ML"), output_from("garli_BS")],
                             output = "ML_w_bootstrap.tre")
-#(?P<prefix>.+)
-#{prefix[0]}
+
 ################################################################################
 # Pipeline definition for multi-locus phypipe
 ################################################################################
@@ -314,6 +313,11 @@ phypipe_multi_locus.transform(task_func = virtualribosome,
                                 extras = [r"{code[0]}"])\
                     .posttask(task_finished)\
                     .mkdir(working_dir)
+# phypipe_multi_locus.collate(task_func = align,
+#                                 input =  "*.fasta",
+#                                 filter = formatter(".+/.+(?!_cds\d+\.fasta)"),
+#                                 #regex(r"^(.+?)(?!_cds\d+)\.fasta$"),
+#                                 output = os.path.join(working_dir,r"{basename[0]}_aligned.fasta")).follows("virtualribosome")
 #phypipe_multi_locus.transform(task_func = align,
 #                                input = "*aligned.")
 ################################################################################
