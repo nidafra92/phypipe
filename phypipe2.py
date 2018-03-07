@@ -313,11 +313,11 @@ phypipe_multi_locus.transform(task_func = virtualribosome,
                                 extras = [r"{code[0]}"])\
                     .posttask(task_finished)\
                     .mkdir(working_dir)
-# phypipe_multi_locus.collate(task_func = align,
-#                                 input =  "*.fasta",
-#                                 filter = formatter(".+/.+(?!_cds\d+\.fasta)"),
-#                                 #regex(r"^(.+?)(?!_cds\d+)\.fasta$"),
-#                                 output = os.path.join(working_dir,r"{basename[0]}_aligned.fasta")).follows("virtualribosome")
+phypipe_multi_locus.transform(task_func = align,
+                                input =  "*.fasta",
+                                filter = formatter(".+/.+(?!_cds\d+\.fasta)"),
+                                #regex(r"^(.+?)(?!_cds\d+)\.fasta$"),
+                                output = os.path.join(working_dir,r"{basename[0]}_aligned.fasta")).follows("virtualribosome")
 #phypipe_multi_locus.transform(task_func = align,
 #                                input = "*aligned.")
 ################################################################################
